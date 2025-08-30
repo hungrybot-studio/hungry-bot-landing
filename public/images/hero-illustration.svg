@@ -1,0 +1,34 @@
+<svg width="400" height="300" viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="400" height="300" fill="url(#gradient)" rx="20"/>
+  
+  <!-- Bot character placeholder -->
+  <circle cx="200" cy="120" r="40" fill="#ed7516"/>
+  <circle cx="185" cy="110" r="5" fill="white"/>
+  <circle cx="215" cy="110" r="5" fill="white"/>
+  <path d="M185 130 Q200 140 215 130" stroke="white" stroke-width="3" stroke-linecap="round" fill="none"/>
+  
+  <!-- Chef hat -->
+  <ellipse cx="200" cy="80" rx="30" ry="15" fill="white"/>
+  <rect x="185" y="70" width="30" height="20" fill="white" rx="5"/>
+  
+  <!-- Cooking elements -->
+  <circle cx="120" cy="200" r="15" fill="#f6ba77"/>
+  <circle cx="280" cy="180" r="12" fill="#f1933d"/>
+  <circle cx="160" cy="220" r="10" fill="#de5a0c"/>
+  <circle cx="320" cy="220" r="8" fill="#b8430c"/>
+  
+  <!-- Speech bubble -->
+  <ellipse cx="300" cy="100" rx="40" ry="25" fill="white" stroke="#ed7516" stroke-width="2"/>
+  <path d="M280 115 L270 125 L285 120 Z" fill="white" stroke="#ed7516" stroke-width="2"/>
+  <text x="300" y="105" text-anchor="middle" font-family="Arial" font-size="12" fill="#ed7516">🍳</text>
+  
+  <!-- Gradient definition -->
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fef7ee;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#fdedd6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#fad7ac;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+</svg>
