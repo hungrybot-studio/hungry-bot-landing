@@ -28,6 +28,9 @@ export const leadFormSchema = z.object({
   fair_price: z.enum(['1$', '3$', '5$', '10$'], {
     required_error: 'Оберіть вартість',
   }),
+  consent: z.boolean().refine((val) => val === true, {
+    message: 'Необхідно погодитися з умовами',
+  }),
 }).refine(
   (data) => data.email || data.telegram,
   {
@@ -66,6 +69,7 @@ export const leadPayloadSchema = z.object({
   fair_price: z.enum(['1$', '3$', '5$', '10$'], {
     required_error: 'Оберіть вартість',
   }),
+  consent: z.boolean(),
   utm_source: z.string().optional(),
   utm_medium: z.string().optional(),
   utm_campaign: z.string().optional(),

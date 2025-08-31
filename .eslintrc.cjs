@@ -12,12 +12,34 @@ const config = {
     '@typescript-eslint/no-explicit-any': 'warn',
     'prefer-const': 'error',
     'no-var': 'error',
+    'no-console': 'warn',
+    'no-debugger': 'error',
   },
   env: {
     browser: true,
-    es2021: true,
+    es2022: true,
     node: true,
   },
+  parserOptions: {
+    ecmaVersion: 2022,
+    sourceType: 'module',
+    ecmaFeatures: {
+      jsx: true,
+    },
+  },
+  settings: {
+    react: {
+      version: 'detect',
+    },
+  },
+  ignorePatterns: [
+    'node_modules/',
+    '.next/',
+    'out/',
+    'dist/',
+    '*.config.js',
+    '*.config.ts',
+  ],
 };
 
 module.exports = config;
