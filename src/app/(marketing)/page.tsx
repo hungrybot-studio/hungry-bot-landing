@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Hero } from '@/components/hero';
-import { AIVoiceAgent } from '@/components/ai-voice-agent';
+import AIVoiceAgent from '@/components/ai-voice-agent';
 import { PainPoints } from '@/components/pain-points';
 import { HowItWorks } from '@/components/how-it-works';
 import { SocialProof } from '@/components/social-proof';
