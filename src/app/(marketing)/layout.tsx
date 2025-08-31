@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter, Poppins } from 'next/font/google';
 import '@/styles/globals.css';
+import ElevenLabsEmbed from '@/components/ElevenLabsEmbed';
 
 
 const inter = Inter({
@@ -123,6 +124,7 @@ export default function MarketingLayout({
         )}
       </head>
       <body className="antialiased">
+        <ElevenLabsEmbed />
         {children}
         
 
