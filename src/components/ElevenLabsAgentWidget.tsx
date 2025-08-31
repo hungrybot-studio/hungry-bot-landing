@@ -3,6 +3,18 @@ import Script from "next/script";
 
 const AGENT_ID = "agent_6101k3vk48naeaers05d01pzw084";
 
+// Додаємо типи для глобальних змінних
+declare global {
+  interface Window {
+    ElevenLabs?: {
+      agentId: string;
+      open?: () => void;
+    };
+    __el_cdn_failed__?: boolean;
+    hungryBotOpenAgent?: () => void;
+  }
+}
+
 export default function ElevenLabsAgentWidget() {
   return (
     <>
@@ -16,6 +28,10 @@ export default function ElevenLabsAgentWidget() {
         src="https://cdn.elevenlabs.io/convai-widget/index.js"
         strategy="afterInteractive"
         onLoad={() => { console.log("[HungryBot] ElevenLabs widget loaded"); }}
+        onError={() => {
+          window.__el_cdn_failed__ = true;
+          console.warn("Віджет не завантажився. Мережа/блокувальник ріже cdn.elevenlabs.io");
+        }}
       />
 
       {/* 3) Додаємо їхній елемент у DOM (обійдемо TypeScript через HTML-вставку) */}
@@ -30,6 +46,12 @@ export default function ElevenLabsAgentWidget() {
       <Script id="hungrybot-open-agent" strategy="afterInteractive">
         {`
           window.hungryBotOpenAgent = function() {
+            // Перевіряємо чи не заблокований CDN
+            if (window.__el_cdn_failed__) {
+              console.warn("CDN заблокований - віджет не доступний");
+              return;
+            }
+            
             const start = Date.now();
             const tryOpen = () => {
               try {

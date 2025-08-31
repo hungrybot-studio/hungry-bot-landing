@@ -61,7 +61,16 @@ export function AIVoiceAgent() {
             viewport={{ once: true }}
           >
             <CTAButton
-              onClick={() => (window as any).hungryBotOpenAgent?.()}
+              onClick={() => {
+                const handleAsk = () => {
+                  if ((window as any).__el_cdn_failed__) {
+                    alert("Ваша мережа блокує ElevenLabs. Спробуйте іншу мережу або вимкніть блокувальник.");
+                    return;
+                  }
+                  (window as any).hungryBotOpenAgent?.();
+                };
+                handleAsk();
+              }}
               variant="primary"
               size="lg"
               location="ai_voice_agent"
