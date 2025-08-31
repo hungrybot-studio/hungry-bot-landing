@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter, Poppins } from 'next/font/google';
 import '@/styles/globals.css';
-import ElevenLabsAgentWidget from '@/components/ElevenLabsAgentWidget';
+
 
 const inter = Inter({
   subsets: ['latin'],
@@ -125,8 +125,7 @@ export default function MarketingLayout({
       <body className="antialiased">
         {children}
         
-        {/* ElevenLabs Agent Widget */}
-        <ElevenLabsAgentWidget />
+
         
         {/* Structured Data */}
         <script
