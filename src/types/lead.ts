@@ -10,6 +10,7 @@ export type LeadPayload = {
   primary_goal: 'Меню на тиждень' | 'Дешеві рецепти' | 'Фітнес-страви' | 'Щось нове';
   payment_willingness: 'Так' | 'Ні' | 'Важко сказати';
   fair_price: '1$' | '3$' | '5$' | '10$';
+  consent: boolean;
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;
