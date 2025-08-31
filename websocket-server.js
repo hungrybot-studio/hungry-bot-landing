@@ -1,7 +1,6 @@
 const { WebSocketServer } = require('ws');
 const http = require('http');
-const { parse } = require('node:url');
-const WebSocket = require('ws'); // <--- Цей рядок додано!
+const WebSocket = require('ws');
 
 // Конфігурація для ElevenLabs Agent Bridge
 const ELEVEN_KEY = process.env.ELEVENLABS_API_KEY?.trim();
@@ -16,180 +15,124 @@ if (!AGENT_ID || AGENT_ID.length < 10) {
   throw new Error('ELEVENLABS_AGENT_ID is missing or too short');
 }
 
-// Логування конфігурації
-console.log("[ENV] ELEVENLABS_API_KEY =", `${ELEVEN_KEY.slice(0, 4)}…(${ELEVEN_KEY.length})`);
-console.log("[ENV] ELEVENLABS_AGENT_ID =", AGENT_ID);
-
-// Хелпери для нативного http.ServerResponse
-function sendJSON(res, status, obj) {
-  res.statusCode = status;
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  res.end(JSON.stringify(obj));
+// Хелпери для HTTP і WebSocket
+function sendJsonHttp(res, obj, status = 200, extraHeaders = {}) {
+  const body = JSON.stringify(obj);
+  res.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+    "access-control-allow-origin": "*",
+    "cache-control": "no-store",
+    "content-length": Buffer.byteLength(body),
+    ...extraHeaders,
+  });
+  res.end(body);
 }
 
-function sendText(res, status, text) {
-  res.statusCode = status;
-  res.setHeader("Content-Type", "text/plain; charset=utf-8");
-  res.end(String(text));
+function sendJsonWS(socket, obj) {
+  try {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify(obj));
+    }
+  } catch (e) {
+    console.error("WS send error:", e);
+  }
 }
 
-// Допоміжне: безпечна відправка WebSocket
-function sendJSON(ws, obj) { 
-  try { 
-    ws.send(JSON.stringify(obj)); 
-  } catch (e) { 
-    console.error("WS send error:", e); 
-  } 
-}
+const PORT = process.env.PORT || 10000;
 
-const PORT = process.env.PORT || 8080;
-
-// Створюємо HTTP сервер
+// Нормальний HTTP-сервер (без плутанини з ws)
 const server = http.createServer((req, res) => {
-  const { pathname } = parse(req.url || '/');
-  
-  if (pathname === '/') {
-    sendJSON(res, 200, {
-      status: "running",
-      message: "Сервер WebSocket працює",
-      timestamp: new Date().toISOString(),
-      port: PORT,
-      "час роботи": (Date.now() - startTime) / 1000,
-      connections: wss.clients.size
-    });
-    return;
-  }
+  try {
+    // CORS preflight
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, {
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "GET,POST,OPTIONS",
+        "access-control-allow-headers": "*",
+        "access-control-max-age": "600",
+      });
+      return res.end();
+    }
 
-  if (pathname === '/health') {
-    sendText(res, 200, "OK");
-    return;
-  }
+    const url = new URL(req.url, `http://${req.headers.host}`);
 
-  sendText(res, 404, "Not Found");
+    if (url.pathname === "/health") {
+      return sendJsonHttp(res, { ok: true, service: "hungry-bot-ws", ts: Date.now() });
+    }
+
+    if (url.pathname === "/") {
+      return sendJsonHttp(res, { status: "running" });
+    }
+
+    return sendJsonHttp(res, { error: "Not found" }, 404);
+  } catch (e) {
+    try { sendJsonHttp(res, { error: String(e?.message || e) }, 500); } catch {}
+  }
 });
 
-// Створюємо WebSocket сервер
+// Прив'язати WS до цього HTTP-серверу й зробити міст до ElevenLabs
 const wss = new WebSocketServer({ server });
-const startTime = Date.now();
 
-console.log(`🚀 Server starting on port ${PORT}...`);
-
-// Обробка WebSocket підключень
 wss.on("connection", (client) => {
   console.log("✅ Client connected");
 
-  // 1) Відкриваємо WS до ElevenLabs Agent (Realtime)
   const upstream = new WebSocket(
     `wss://api.elevenlabs.io/v1/convai/conversation?agent_id=${AGENT_ID}`,
     { headers: { "xi-api-key": ELEVEN_KEY } }
   );
 
-  // 2) Коли агент підключився — (опційно) ініціюємо першу відповідь
   upstream.on("open", () => {
     console.log("🟢 Connected to ElevenLabs Agent");
-    // Якщо потрібно, щоб агент відразу сказав вітання:
-    // sendJSON(upstream, { type: "response.create" }); // назва події з Realtime доки
+    // за потреби можна одразу дати агенту команду заговорити:
+    // upstream.send(JSON.stringify({ type: "response.create" }));
   });
 
-  // 3) Повідомлення від браузера → в ElevenLabs
+  // клієнтський браузер -> агент
   client.on("message", (raw) => {
-    let msg; 
-    try { 
-      msg = JSON.parse(raw); 
-    } catch (e) { 
-      console.error("Failed to parse client message:", e);
-      return; 
-    }
-
+    let msg; try { msg = JSON.parse(raw); } catch { return; }
     if (msg.type === "activate_agent") {
-      // або чекаємо автопривітання, або явно просимо відповідь:
-      // sendJSON(upstream, { type: "response.create" });
-      console.log("🎯 Agent activated by client");
+      // або чекаємо автопривітання, або запускаємо відповідь:
+      // upstream.send(JSON.stringify({ type: "response.create" }));
       return;
     }
-
     if (msg.type === "interrupt") {
-      // перервати поточну відповідь агента
-      sendJSON(upstream, { type: "response.cancel" });
-      console.log("⏹️ Client interrupted agent");
+      upstream.send(JSON.stringify({ type: "response.cancel" }));
       return;
     }
-
-    // (опційно) Якщо колись додасте STT: надсилати звук користувача сюди
-    // if (msg.type === "user_audio_chunk") { ... }
-    
-    console.log("📤 Client → Agent:", msg.type);
+    // (опційно) тут колись піде аудіо користувача до агента
   });
 
-  // 4) Відповіді ElevenLabs → у браузер
+  // агент -> клієнтський браузер
   upstream.on("message", (buf) => {
-    let ev; 
-    try { 
-      ev = JSON.parse(buf.toString()); 
-    } catch (e) { 
-      console.error("Failed to parse agent message:", e);
-      return; 
-    }
+    let ev; try { ev = JSON.parse(buf.toString()); } catch { return; }
 
-    console.log("📥 Agent → Client:", ev.type);
-
-    // Нижче — типові події Realtime (назви можуть трохи відрізнятися — ми обробили найчастіші)
-    // Потік аудіо шматками (base64)
     if (ev.type === "response.audio.delta" && ev.delta) {
-      sendJSON(client, { type: "audio_chunk", data: ev.delta, final: false });
-      return;
+      return sendJsonWS(client, { type: "audio_chunk", data: ev.delta, final: false });
     }
-
-    // Кінець потоку аудіо
     if (ev.type === "response.audio.completed") {
-      sendJSON(client, { type: "audio_chunk", data: "", final: true });
-      return;
+      return sendJsonWS(client, { type: "audio_chunk", data: "", final: true });
     }
-
-    // Текст відповіді агента
     if (ev.type === "response.completed" && ev.text) {
-      sendJSON(client, { type: "agent_speech", message: ev.text });
-      return;
+      return sendJsonWS(client, { type: "agent_speech", message: ev.text });
     }
-
-    // Вітання/системні
     if (ev.type === "conversation.created" || ev.type === "session.created") {
-      sendJSON(client, { type: "welcome", message: "Agent ready" });
-      return;
+      return sendJsonWS(client, { type: "welcome", message: "Agent ready" });
     }
-
-    // Помилки
     if (ev.type === "error") {
-      sendJSON(client, { type: "error", message: ev.message || "Agent error" });
-      return;
+      return sendJsonWS(client, { type: "error", message: ev.message || "Agent error" });
     }
   });
 
-  const closeBoth = () => { 
-    try { upstream.close(); } catch (e) { console.error("Upstream close error:", e); }
-    try { client.close(); } catch (e) { console.error("Client close error:", e); }
-  };
-  
-  upstream.on("close", () => {
-    console.log("🔴 ElevenLabs Agent disconnected");
-    closeBoth();
-  });
-  
-  upstream.on("error", (e) => { 
-    console.error("UP error", e); 
-    sendJSON(client, {type:"error", message:String(e.message||e)}); 
-  });
-  
-  client.on("close", () => { 
-    console.log("👋 Client closed"); 
-    closeBoth(); 
-  });
+  const closeBoth = () => { try{upstream.close();}catch{} try{client.close();}catch{} };
+  upstream.on("close", closeBoth);
+  upstream.on("error", (e) => { console.error("UP error", e); sendJsonWS(client, { type:"error", message: String(e.message||e) }); });
+  client.on("close", () => { console.log("👋 Client closed"); closeBoth(); });
 });
 
-// Запускаємо сервер
-server.listen(PORT, () => {
+// Старт сервера коректно (слухати 0.0.0.0 і $PORT)
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`[ENV] ELEVENLABS_AGENT_ID = ${AGENT_ID}`);
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🔗 WebSocket endpoint: ws://localhost:${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
-  console.log(`📈 Status: http://localhost:${PORT}/`);
 });
