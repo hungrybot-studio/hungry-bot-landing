@@ -7,12 +7,12 @@ import { CTAButton } from './cta-button';
 export function AIVoiceAgent() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState('');
+  const [isAgentActive, setIsAgentActive] = useState(false);
+  const [agentMessage, setAgentMessage] = useState('');
   const [messages, setMessages] = useState<Array<{type: 'user' | 'bot', text: string}>>([]);
-  
+
   const wsRef = useRef<WebSocket | null>(null);
-  const recognitionRef = useRef<any>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // WebSocket підключення
   const connectWebSocket = () => {
@@ -24,11 +24,8 @@ export function AIVoiceAgent() {
         setIsConnected(true);
         setIsConnecting(false);
         
-        // Відправляємо привітання
-        ws.send(JSON.stringify({
-          type: 'welcome',
-          message: 'Привіт! Hungry Bot готовий до роботи!'
-        }));
+        // Автоматично активуємо агента
+        activateAgent();
       };
       
       ws.onmessage = (event) => {
@@ -36,10 +33,24 @@ export function AIVoiceAgent() {
           const data = JSON.parse(event.data);
           console.log('📨 Отримано повідомлення:', data);
           
-          if (data.type === 'welcome') {
+          if (data.type === 'agent_speech') {
+            // Агент починає говорити
+            setAgentMessage(data.message);
+            setIsAgentActive(true);
+            
+            // Відтворюємо аудіо від ElevenLabs
+            if (data.audioUrl) {
+              playAgentAudio(data.audioUrl);
+            }
+            
             setMessages(prev => [...prev, { type: 'bot', text: data.message }]);
-          } else if (data.type === 'echo') {
-            setMessages(prev => [...prev, { type: 'bot', text: `Відповідь: ${data.originalMessage.text || data.originalMessage}` }]);
+          } else if (data.type === 'agent_response') {
+            // Відповідь агента
+            setAgentMessage(data.message);
+            setMessages(prev => [...prev, { type: 'bot', text: data.message }]);
+          } else if (data.type === 'user_input') {
+            // Користувач щось сказав
+            setMessages(prev => [...prev, { type: 'user', text: data.text }]);
           }
         } catch (error) {
           console.error('❌ Помилка парсингу повідомлення:', error);
@@ -50,12 +61,14 @@ export function AIVoiceAgent() {
         console.error('❌ WebSocket помилка:', error);
         setIsConnected(false);
         setIsConnecting(false);
+        setIsAgentActive(false);
       };
       
       ws.onclose = () => {
         console.log('👋 WebSocket з\'єднання закрито');
         setIsConnected(false);
         setIsConnecting(false);
+        setIsAgentActive(false);
       };
       
       wsRef.current = ws;
@@ -66,59 +79,40 @@ export function AIVoiceAgent() {
     }
   };
 
-  // Голосове розпізнавання
-  const startListening = () => {
-    if (!isConnected) return;
-    
-    try {
-      // @ts-ignore
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  // Активація агента
+  const activateAgent = () => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      console.log('🤖 Активація Hungry Bot...');
       
-      if (!SpeechRecognition) {
-        alert('Голосове розпізнавання не підтримується у вашому браузері');
-        return;
-      }
+      // Відправляємо команду активації
+      wsRef.current.send(JSON.stringify({
+        type: 'activate_agent',
+        action: 'start_conversation'
+      }));
+    }
+  };
+
+  // Відтворення аудіо від агента
+  const playAgentAudio = (audioUrl: string) => {
+    if (audioRef.current) {
+      audioRef.current.src = audioUrl;
+      audioRef.current.play().catch(error => {
+        console.error('❌ Помилка відтворення аудіо:', error);
+      });
+    }
+  };
+
+  // Переривання агента голосом
+  const interruptAgent = () => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      console.log('🎤 Перериваю агента...');
       
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = 'uk-UA';
+      wsRef.current.send(JSON.stringify({
+        type: 'interrupt_agent',
+        action: 'user_speaking'
+      }));
       
-      recognitionRef.current.onstart = () => {
-        setIsListening(true);
-        setTranscript('Слухаю...');
-      };
-      
-      recognitionRef.current.onresult = (event: any) => {
-        const text = event.results[0][0].transcript;
-        setTranscript(text);
-        
-        // Відправляємо повідомлення через WebSocket
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({
-            type: 'message',
-            text: text
-          }));
-          
-          setMessages(prev => [...prev, { type: 'user', text: text }]);
-        }
-      };
-      
-      recognitionRef.current.onerror = (event: any) => {
-        console.error('❌ Помилка розпізнавання:', event.error);
-        setIsListening(false);
-        setTranscript('');
-      };
-      
-      recognitionRef.current.onend = () => {
-        setIsListening(false);
-        setTranscript('');
-      };
-      
-      recognitionRef.current.start();
-      
-    } catch (error) {
-      console.error('❌ Помилка запуску розпізнавання:', error);
+      setIsAgentActive(false);
     }
   };
 
@@ -132,6 +126,8 @@ export function AIVoiceAgent() {
       wsRef.current.close();
     }
     setIsConnected(false);
+    setIsAgentActive(false);
+    setAgentMessage('');
     setMessages([]);
   };
 
@@ -142,9 +138,6 @@ export function AIVoiceAgent() {
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
-      }
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
       }
     };
   }, []);
@@ -191,8 +184,8 @@ export function AIVoiceAgent() {
             transition={{ delay: 0.4, duration: 0.6 }}
             viewport={{ once: true }}
           >
-            Hungry Bot відповість на найпоширеніші питання про себе та свої можливості. 
-            Просто натисни кнопку і почни розмову!
+            Hungry Bot — твій кулінарний AI-асистент! Просто натисни кнопку і почни розмову. 
+            Агент сам веде діалог та відповідає на всі твої питання про кухню.
           </motion.p>
 
           {/* AI Voice Agent Button */}
@@ -216,27 +209,34 @@ export function AIVoiceAgent() {
             ) : (
               <div className="space-y-4">
                 <div className="bg-white rounded-lg p-6 shadow-lg max-w-md mx-auto">
-                  <h3 className="text-lg font-semibold mb-4">Hungry Bot підключено! 🤖✨</h3>
+                  <h3 className="text-lg font-semibold mb-4">Hungry Bot активовано! 🤖✨</h3>
                   
-                  {/* Голосова кнопка */}
-                  <button
-                    onClick={startListening}
-                    disabled={isListening}
-                    className={`w-full py-3 px-6 rounded-lg font-medium transition-colors ${
-                      isListening 
-                        ? 'bg-red-500 text-white cursor-not-allowed' 
-                        : 'bg-green-500 hover:bg-green-600 text-white'
-                    }`}
-                  >
-                    {isListening ? '🎤 Слухаю...' : '🎤 Почати розмову'}
-                  </button>
-                  
-                  {/* Транскрипт */}
-                  {transcript && (
-                    <div className="mt-4 p-3 bg-gray-100 rounded-lg">
-                      <p className="text-sm text-gray-700">{transcript}</p>
+                  {/* Статус агента */}
+                  {isAgentActive && (
+                    <div className="mb-4 p-3 bg-green-100 rounded-lg">
+                      <p className="text-green-800 text-sm">🎤 Агент говорить...</p>
                     </div>
                   )}
+                  
+                  {/* Повідомлення агента */}
+                  {agentMessage && (
+                    <div className="mt-4 p-3 bg-blue-100 rounded-lg">
+                      <p className="text-blue-800 text-sm">{agentMessage}</p>
+                    </div>
+                  )}
+                  
+                  {/* Кнопка переривання */}
+                  <button
+                    onClick={interruptAgent}
+                    disabled={!isAgentActive}
+                    className={`w-full py-3 px-6 rounded-lg font-medium transition-colors ${
+                      isAgentActive 
+                        ? 'bg-red-500 hover:bg-red-600 text-white' 
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    🎤 Перервати агента
+                  </button>
                   
                   {/* Повідомлення */}
                   {messages.length > 0 && (
@@ -268,6 +268,9 @@ export function AIVoiceAgent() {
             )}
           </motion.div>
 
+          {/* Прихований аудіо елемент */}
+          <audio ref={audioRef} style={{ display: 'none' }} />
+
           {/* Feature Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16">
             {/* Card 1 */}
@@ -281,9 +284,9 @@ export function AIVoiceAgent() {
               <div className="w-12 h-12 bg-pink-100 rounded-lg flex items-center justify-center mb-4 mx-auto">
                 <span className="text-2xl">🤖</span>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Про себе</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">AI-Асистент</h3>
               <p className="text-gray-600">
-                Дізнайся більше про Hungry Bot та його можливості
+                Hungry Bot сам веде діалог та відповідає на всі питання про кухню
               </p>
             </motion.div>
 
@@ -296,11 +299,11 @@ export function AIVoiceAgent() {
               viewport={{ once: true }}
             >
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4 mx-auto">
-                <span className="text-2xl">🔍</span>
+                <span className="text-2xl">🎤</span>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Кулінарні поради</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Голосовий інтерфейс</h3>
               <p className="text-gray-600">
-                Отримай поради щодо приготування та рецептів
+                Натуральна мова через ElevenLabs та можливість переривати агента
               </p>
             </motion.div>
 
@@ -312,25 +315,25 @@ export function AIVoiceAgent() {
               transition={{ delay: 1.2, duration: 0.6 }}
               viewport={{ once: true }}
             >
-              <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-4 mx-auto">
-                <span className="text-2xl">💬</span>
+              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4 mx-auto">
+                <span className="text-2xl">🍳</span>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Особистий помічник</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Кулінарна експертиза</h3>
               <p className="text-gray-600">
-                Hungry Bot стане твоїм кухонним другом
+                Спеціалізується на рецептах, кухонних порадах та кулінарних секретах
               </p>
             </motion.div>
           </div>
 
           {/* Footer Note */}
           <motion.p
-            className="text-sm text-gray-500 mt-12"
+            className="text-sm text-gray-500 mt-12 italic"
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             transition={{ delay: 1.4, duration: 0.6 }}
             viewport={{ once: true }}
           >
-            * Hungry Bot готовий відповісти на твої питання прямо зараз
+            * Hungry Bot використовує ElevenLabs для натурального голосу та AI для розумних відповідей
           </motion.p>
         </motion.div>
       </div>
