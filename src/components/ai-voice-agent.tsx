@@ -39,8 +39,8 @@ export function AIVoiceAgent() {
             setIsAgentActive(true);
             
             // Відтворюємо аудіо від ElevenLabs
-            if (data.audioUrl) {
-              playAgentAudio(data.audioUrl);
+            if (data.audioData) {
+              playAgentAudio(data.audioData);
             }
             
             setMessages(prev => [...prev, { type: 'bot', text: data.message }]);
@@ -93,12 +93,35 @@ export function AIVoiceAgent() {
   };
 
   // Відтворення аудіо від агента
-  const playAgentAudio = (audioUrl: string) => {
-    if (audioRef.current) {
-      audioRef.current.src = audioUrl;
-      audioRef.current.play().catch(error => {
-        console.error('❌ Помилка відтворення аудіо:', error);
-      });
+  const playAgentAudio = (audioData: string) => {
+    try {
+      if (audioRef.current) {
+        // Конвертуємо base64 в аудіо
+        const audioBlob = new Blob([
+          Uint8Array.from(atob(audioData), c => c.charCodeAt(0))
+        ], { type: 'audio/mpeg' });
+        
+        // Створюємо URL для аудіо
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        // Встановлюємо джерело та відтворюємо
+        audioRef.current.src = audioUrl;
+        audioRef.current.volume = 1.0; // Максимальна гучність
+        
+        // Відтворюємо аудіо
+        audioRef.current.play().then(() => {
+          console.log('🎵 Аудіо від агента відтворюється');
+        }).catch(error => {
+          console.error('❌ Помилка відтворення аудіо:', error);
+        });
+        
+        // Очищаємо URL після завантаження
+        audioRef.current.onloadeddata = () => {
+          URL.revokeObjectURL(audioUrl);
+        };
+      }
+    } catch (error) {
+      console.error('❌ Помилка обробки аудіо:', error);
     }
   };
 
