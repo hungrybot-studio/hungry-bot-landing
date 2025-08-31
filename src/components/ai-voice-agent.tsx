@@ -21,6 +21,8 @@ export function AIVoiceAgent() {
   const connectWebSocket = () => {
     try {
       const WS_URL = process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'wss://hungry-bot-websocket-server.onrender.com';
+      console.log("🔗 WS_URL:", WS_URL);
+      console.log("🔗 NODE_ENV:", process.env.NODE_ENV);
       const ws = new WebSocket(WS_URL);
       
       ws.onopen = () => {
@@ -32,54 +34,65 @@ export function AIVoiceAgent() {
         activateAgent();
       };
       
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log('📨 Отримано повідомлення:', data);
+             ws.onmessage = (event) => {
+         try {
+           const data = JSON.parse(event.data);
+           console.log('📨 Отримано повідомлення:', data);
 
-          switch (data.type) {
-            case 'welcome':
-              setMessages(prev => [...prev, { type: 'bot', text: data.message }]);
-              break;
-            
-            case 'agent_speech':
-              setAgentMessage(data.message);
-              setMessages(prev => [...prev, { type: 'bot', text: data.message }]);
-              break;
-            
-            case 'audio':
-              if (data.format === 'mp3' && data.data) {
-                playBase64Mp3(data.data);
-              }
-              break;
-              
-            case 'audio_chunk':
-              if (typeof data.data === 'string') {
-                b64buf += data.data;
-                if (data.final) {
-                  playBase64Mp3(b64buf);
-                  b64buf = "";
-                }
-              }
-              break;
-            
-            case 'tts_error':
-              console.error('❌ Помилка TTS:', data.message);
-              setMessages(prev => [...prev, { type: 'bot', text: `Помилка TTS: ${data.message}` }]);
-              break;
-            
-            case 'error':
-              console.error('❌ Помилка сервера:', data.error);
-              setMessages(prev => [...prev, { type: 'bot', text: `Помилка: ${data.error}` }]);
-              break;
-            
-            default:
-              console.log('📨 Невідомий тип повідомлення:', data);
-          }
-        } catch (error) {
-          console.error('❌ Помилка обробки повідомлення:', error);
-        }
-      };
+           switch (data.type) {
+             case 'welcome':
+               console.log('✅ Отримано привітання від сервера');
+               setMessages(prev => [...prev, { type: 'bot', text: data.message }]);
+               break;
+             
+             case 'agent_speech':
+               console.log('🤖 Агент говорить:', data.message);
+               setAgentMessage(data.message);
+               setMessages(prev => [...prev, { type: 'bot', text: data.message }]);
+               setIsAgentActive(true);
+               break;
+             
+             case 'audio':
+               if (data.format === 'mp3' && data.data) {
+                 console.log('🎵 Отримано аудіо від агента');
+                 playBase64Mp3(data.data);
+               }
+               break;
+               
+             case 'audio_chunk':
+               if (typeof data.data === 'string') {
+                 b64buf += data.data;
+                 if (data.final) {
+                   console.log('🎵 Зібрано аудіо з чанків');
+                   playBase64Mp3(b64buf);
+                   b64buf = "";
+                 }
+               }
+               break;
+             
+             case 'tts_error':
+               console.error('❌ Помилка TTS:', data.message);
+               setMessages(prev => [...prev, { type: 'bot', text: `Помилка TTS: ${data.message}` }]);
+               setIsAgentActive(false);
+               break;
+             
+             case 'error':
+               console.error('❌ Помилка сервера:', data.error);
+               setMessages(prev => [...prev, { type: 'bot', text: `Помилка: ${data.error}` }]);
+               setIsAgentActive(false);
+               break;
+             
+             case 'echo':
+               console.log('🔄 Ехо від сервера:', data.originalMessage);
+               break;
+             
+             default:
+               console.log('📨 Невідомий тип повідомлення:', data);
+           }
+         } catch (error) {
+           console.error('❌ Помилка обробки повідомлення:', error);
+         }
+       };
       
       ws.onerror = (error) => {
         console.error('❌ WebSocket помилка:', error);
@@ -108,11 +121,15 @@ export function AIVoiceAgent() {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       console.log('🤖 Активація Hungry Bot...');
       
-      // Відправляємо команду активації
-      wsRef.current.send(JSON.stringify({
+      const activationMessage = {
         type: 'activate_agent',
         action: 'start_conversation'
-      }));
+      };
+      
+      console.log('📤 Відправляю команду активації:', activationMessage);
+      wsRef.current.send(JSON.stringify(activationMessage));
+    } else {
+      console.error('❌ WebSocket не готовий для активації агента');
     }
   };
 
@@ -282,25 +299,7 @@ export function AIVoiceAgent() {
                    disabled={isConnecting}
                  />
                  
-                 {/* Тестова кнопка тільки для розробки */}
-                 {process.env.NODE_ENV !== "production" && (
-                   <button
-                     onClick={async () => {
-                       try {
-                         await unlockAudio();
-                         const url = "https://hungry-bot-websocket-server.onrender.com/status/tts?text=" + 
-                           encodeURIComponent("Привіт! Я Голодний Бот");
-                         const a = new Audio(url);
-                         a.play().catch(console.error);
-                       } catch (error) {
-                         console.error('❌ Помилка тесту звуку:', error);
-                       }
-                     }}
-                     className="mx-auto block px-6 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors"
-                   >
-                     🎵 Тест звуку (DEV)
-                   </button>
-                 )}
+                 
                </div>
              ) : (
               <div className="space-y-4">
