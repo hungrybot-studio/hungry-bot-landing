@@ -13,11 +13,15 @@ export function AIVoiceAgent() {
 
   const wsRef = useRef<WebSocket | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  // Буфер для чанків аудіо
+  let b64buf = "";
 
   // WebSocket підключення
   const connectWebSocket = () => {
     try {
-      const ws = new WebSocket('wss://hungry-bot-websocket-server.onrender.com');
+      const WS_URL = process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'wss://hungry-bot-websocket-server.onrender.com';
+      const ws = new WebSocket(WS_URL);
       
       ws.onopen = () => {
         console.log('✅ WebSocket з\'єднання встановлено');
@@ -46,6 +50,16 @@ export function AIVoiceAgent() {
             case 'audio':
               if (data.format === 'mp3' && data.data) {
                 playBase64Mp3(data.data);
+              }
+              break;
+              
+            case 'audio_chunk':
+              if (typeof data.data === 'string') {
+                b64buf += data.data;
+                if (data.final) {
+                  playBase64Mp3(b64buf);
+                  b64buf = "";
+                }
               }
               break;
             
@@ -149,18 +163,36 @@ export function AIVoiceAgent() {
     } catch {}
   }
 
+  // Черга аудіо для плавного відтворення
+  const queue: string[] = [];
+  let playing = false;
+
+  function enqueue(url: string) {
+    queue.push(url); 
+    if (!playing) playNext();
+  }
+
+  function playNext() {
+    const url = queue.shift(); 
+    if (!url) { 
+      playing = false; 
+      return; 
+    }
+    playing = true;
+    const a = new Audio(url);
+    a.onended = a.onerror = () => { 
+      URL.revokeObjectURL(url); 
+      playNext(); 
+    };
+    a.play().catch(() => playNext());
+  }
+
   // Функція для відтворення base64 MP3
   function playBase64Mp3(b64: string) {
     const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
     const blob = new Blob([bin], { type: "audio/mpeg" });
     const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    audio.play().catch(e => console.error("Audio play blocked:", e));
-    
-    // Очищаємо URL після завантаження
-    audio.onloadeddata = () => {
-      URL.revokeObjectURL(url);
-    };
+    enqueue(url);
   }
 
   const handleDisconnect = () => {
@@ -250,26 +282,25 @@ export function AIVoiceAgent() {
                    disabled={isConnecting}
                  />
                  
-                 {/* Тестова кнопка для перевірки звуку */}
-                 <button
-                   onClick={async () => {
-                     try {
-                       // Розблокувати аудіо
-                       await unlockAudio();
-                       
-                       // Тест звуку напряму з Render
-                       const url = "https://hungry-bot-websocket-server.onrender.com/status/tts?text=" + 
-                         encodeURIComponent("Привіт! Я Голодний Бот");
-                       const a = new Audio(url);
-                       a.play().catch(console.error);
-                     } catch (error) {
-                       console.error('❌ Помилка тесту звуку:', error);
-                     }
-                   }}
-                   className="mx-auto block px-6 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors"
-                 >
-                   🎵 Тест звуку
-                 </button>
+                 {/* Тестова кнопка тільки для розробки */}
+                 {process.env.NODE_ENV !== "production" && (
+                   <button
+                     onClick={async () => {
+                       try {
+                         await unlockAudio();
+                         const url = "https://hungry-bot-websocket-server.onrender.com/status/tts?text=" + 
+                           encodeURIComponent("Привіт! Я Голодний Бот");
+                         const a = new Audio(url);
+                         a.play().catch(console.error);
+                       } catch (error) {
+                         console.error('❌ Помилка тесту звуку:', error);
+                       }
+                     }}
+                     className="mx-auto block px-6 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors"
+                   >
+                     🎵 Тест звуку (DEV)
+                   </button>
+                 )}
                </div>
              ) : (
               <div className="space-y-4">
