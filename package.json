@@ -436,6 +436,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "websocket": "node websocket-server.js",
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
