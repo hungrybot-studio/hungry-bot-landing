@@ -1,12 +1,43 @@
 const { WebSocketServer } = require('ws');
+const http = require('http');
 
 // Отримуємо порт з змінних середовища або використовуємо 8080 за замовчуванням
 const PORT = process.env.PORT || 8080;
 
-// Створюємо WebSocket сервер
-const wss = new WebSocketServer({ port: PORT });
+// Створюємо HTTP сервер
+const server = http.createServer((req, res) => {
+  // Налаштовуємо CORS заголовки
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  if (req.method === 'OPTIONS') {
+    res.writeHead(200);
+    res.end();
+    return;
+  }
 
-console.log(`🚀 WebSocket сервер запущено на порту ${PORT}`);
+  if (req.method === 'GET') {
+    // Відповідаємо на GET запити
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      status: 'running',
+      message: 'WebSocket server is running',
+      timestamp: new Date().toISOString(),
+      port: PORT,
+      uptime: process.uptime(),
+      connections: wss.clients.size
+    }));
+  } else {
+    res.writeHead(405, { 'Content-Type': 'text/plain' });
+    res.end('Method not allowed');
+  }
+});
+
+// Створюємо WebSocket сервер на основі HTTP сервера
+const wss = new WebSocketServer({ server });
+
+console.log(`🚀 HTTP та WebSocket сервер запущено на порту ${PORT}`);
 
 // Обробка підключень
 wss.on('connection', (ws, req) => {
@@ -68,23 +99,26 @@ wss.on('error', (error) => {
   console.error('❌ Помилка WebSocket сервера:', error);
 });
 
+// Запускаємо HTTP сервер
+server.listen(PORT, () => {
+  console.log(`📡 HTTP та WebSocket сервер готовий до прийому підключень на порту ${PORT}`);
+  console.log(`🌐 HTTP: http://localhost:${PORT}`);
+  console.log(`🔌 WebSocket: ws://localhost:${PORT}`);
+});
+
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\n🛑 Отримано сигнал SIGINT, закриваю сервер...');
-  wss.close(() => {
-    console.log('✅ WebSocket сервер успішно закрито');
+  server.close(() => {
+    console.log('✅ HTTP та WebSocket сервер успішно закрито');
     process.exit(0);
   });
 });
 
 process.on('SIGTERM', () => {
   console.log('\n🛑 Отримано сигнал SIGTERM, закриваю сервер...');
-  wss.close(() => {
-    console.log('✅ WebSocket сервер успішно закрито');
+  server.close(() => {
+    console.log('✅ HTTP та WebSocket сервер успішно закрито');
     process.exit(0);
   });
 });
-
-// Логування статусу сервера
-console.log(`📡 WebSocket сервер готовий до прийому підключень на порту ${PORT}`);
-console.log(`🌐 Використовуйте wss://your-domain.com або ws://localhost:${PORT} для підключення`);
