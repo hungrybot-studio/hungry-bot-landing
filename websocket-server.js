@@ -1,6 +1,7 @@
 const { WebSocketServer } = require('ws');
 const http = require('http');
 const { parse } = require('node:url');
+const WebSocket = require('ws'); // <--- Цей рядок додано!
 
 // Конфігурація для ElevenLabs Agent Bridge
 const ELEVEN_KEY = process.env.ELEVENLABS_API_KEY?.trim();
