@@ -32,28 +32,54 @@ export function AIVoiceAgent() {
         try {
           const data = JSON.parse(event.data);
           console.log('📨 Отримано повідомлення:', data);
-          
-          if (data.type === 'agent_speech') {
-            // Агент починає говорити
-            setAgentMessage(data.message);
-            setIsAgentActive(true);
+
+          switch (data.type) {
+            case 'welcome':
+              setMessages(prev => [...prev, { type: 'bot', text: data.message }]);
+              break;
             
-            // Відтворюємо аудіо від ElevenLabs
-            if (data.audioData) {
-              playAgentAudio(data.audioData);
-            }
+            case 'agent_speech':
+              setAgentMessage(data.message);
+              setMessages(prev => [...prev, { type: 'bot', text: data.message }]);
+              break;
             
-            setMessages(prev => [...prev, { type: 'bot', text: data.message }]);
-          } else if (data.type === 'agent_response') {
-            // Відповідь агента
-            setAgentMessage(data.message);
-            setMessages(prev => [...prev, { type: 'bot', text: data.message }]);
-          } else if (data.type === 'user_input') {
-            // Користувач щось сказав
-            setMessages(prev => [...prev, { type: 'user', text: data.text }]);
+            case 'audio':
+              if (data.format === 'mp3' && data.data) {
+                // перетворюємо base64 -> Blob -> Audio
+                const bin = Uint8Array.from(atob(data.data), c => c.charCodeAt(0));
+                const blob = new Blob([bin], { type: 'audio/mpeg' });
+                const url = URL.createObjectURL(blob);
+
+                const audio = new Audio(url);
+                audio.volume = 1.0;
+                audio.play().then(() => {
+                  console.log('🎵 Аудіо від агента відтворюється');
+                }).catch((e) => {
+                  console.error('❌ Audio play blocked:', e);
+                });
+                
+                // Очищаємо URL після завантаження
+                audio.onloadeddata = () => {
+                  URL.revokeObjectURL(url);
+                };
+              }
+              break;
+            
+            case 'tts_error':
+              console.error('❌ Помилка TTS:', data.message);
+              setMessages(prev => [...prev, { type: 'bot', text: `Помилка TTS: ${data.message}` }]);
+              break;
+            
+            case 'error':
+              console.error('❌ Помилка сервера:', data.error);
+              setMessages(prev => [...prev, { type: 'bot', text: `Помилка: ${data.error}` }]);
+              break;
+            
+            default:
+              console.log('📨 Невідомий тип повідомлення:', data);
           }
         } catch (error) {
-          console.error('❌ Помилка парсингу повідомлення:', error);
+          console.error('❌ Помилка обробки повідомлення:', error);
         }
       };
       
@@ -92,38 +118,7 @@ export function AIVoiceAgent() {
     }
   };
 
-  // Відтворення аудіо від агента
-  const playAgentAudio = (audioData: string) => {
-    try {
-      if (audioRef.current) {
-        // Конвертуємо base64 в аудіо
-        const audioBlob = new Blob([
-          Uint8Array.from(atob(audioData), c => c.charCodeAt(0))
-        ], { type: 'audio/mpeg' });
-        
-        // Створюємо URL для аудіо
-        const audioUrl = URL.createObjectURL(audioBlob);
-        
-        // Встановлюємо джерело та відтворюємо
-        audioRef.current.src = audioUrl;
-        audioRef.current.volume = 1.0; // Максимальна гучність
-        
-        // Відтворюємо аудіо
-        audioRef.current.play().then(() => {
-          console.log('🎵 Аудіо від агента відтворюється');
-        }).catch(error => {
-          console.error('❌ Помилка відтворення аудіо:', error);
-        });
-        
-        // Очищаємо URL після завантаження
-        audioRef.current.onloadeddata = () => {
-          URL.revokeObjectURL(audioUrl);
-        };
-      }
-    } catch (error) {
-      console.error('❌ Помилка обробки аудіо:', error);
-    }
-  };
+
 
   // Переривання агента голосом
   const interruptAgent = () => {
