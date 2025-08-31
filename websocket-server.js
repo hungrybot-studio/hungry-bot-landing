@@ -63,7 +63,8 @@ async function streamTtsToResponse(res, text, {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort("TTS timeout"), timeoutMs);
 
-  const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?optimize_streaming_latency=3&output_format=${format}`;
+  // Використовуємо стандартний endpoint згідно з документацією
+  const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
 
   let upstream;
   try {
@@ -78,6 +79,7 @@ async function streamTtsToResponse(res, text, {
       body: JSON.stringify({
         model_id: modelId,
         text,
+        output_format: format,  // Додано згідно з документацією
         voice_settings: { stability: 0.3, similarity_boost: 0.8 },
       }),
     });
@@ -139,7 +141,7 @@ const server = http.createServer(async (req, res) => {
 
     // TTS JSON endpoint для діагностики
     if (pathname === '/status/tts-json') {
-      const url = `https://api.elevenlabs.io/v1/text-to-speech/${env.ELEVENLABS_VOICE_ID}/stream?output_format=mp3_44100_128`;
+      const url = `https://api.elevenlabs.io/v1/text-to-speech/${env.ELEVENLABS_VOICE_ID}`;
       try {
         const r = await fetch(url, {
           method: "POST",
@@ -148,7 +150,11 @@ const server = http.createServer(async (req, res) => {
             "Content-Type": "application/json",
             "Accept": "audio/mpeg",
           },
-          body: JSON.stringify({ model_id: env.ELEVENLABS_MODEL_ID, text: "ok" }),
+          body: JSON.stringify({ 
+            model_id: env.ELEVENLABS_MODEL_ID, 
+            text: "ok",
+            output_format: "mp3_44100_128"  // Додано згідно з документацією
+          }),
         });
         const out = { status: r.status, ok: r.ok, headers: Object.fromEntries(r.headers.entries()) };
         if (!r.ok) out.body = (await r.text().catch(() => "")).slice(0, 800);
@@ -184,13 +190,12 @@ async function elevenSelfCheck() {
   }
 }
 
-// Канонічний генератор аудіо через ElevenLabs
+// Канонічний генератор аудіо через ElevenLabs (згідно з офіційною документацією)
 async function generateElevenLabsAudio(text) {
   if (!text || !text.trim()) throw new Error("TTS text is empty");
 
-  const url =
-    `https://api.elevenlabs.io/v1/text-to-speech/${env.ELEVENLABS_VOICE_ID}/stream` +
-    `?optimize_streaming_latency=3&output_format=mp3_44100_128`;
+  // Використовуємо стандартний endpoint без stream (згідно з документацією)
+  const url = `https://api.elevenlabs.io/v1/text-to-speech/${env.ELEVENLABS_VOICE_ID}`;
 
   const res = await fetch(url, {
     method: "POST",
@@ -202,13 +207,22 @@ async function generateElevenLabsAudio(text) {
     body: JSON.stringify({
       model_id: env.ELEVENLABS_MODEL_ID,
       text,
+      output_format: "mp3_44100_128",  // Додано згідно з документацією
       voice_settings: { stability: 0.3, similarity_boost: 0.8 },
     }),
   });
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`ElevenLabs ${res.status}: ${body.slice(0, 300)}`);
+    const errorMessage = `ElevenLabs ${res.status}: ${body.slice(0, 300)}`;
+    console.error(`[TTS] API Error ${res.status}:`, body);
+    
+    // Спеціальна обробка для 401 помилки
+    if (res.status === 401) {
+      throw new Error(`API ключ не має прав для Text-to-Speech. Перевірте права на https://elevenlabs.io/app/settings/api-keys`);
+    }
+    
+    throw new Error(errorMessage);
   }
 
   const buf = Buffer.from(await res.arrayBuffer());
