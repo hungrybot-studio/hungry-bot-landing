@@ -1,5 +1,8 @@
 const { WebSocketServer } = require('ws');
 const http = require('http');
+const { pipeline } = require('node:stream');
+const { Readable } = require('node:stream');
+const { parse } = require('node:url');
 
 // Імпортуємо конфігурацію (якщо використовуємо TypeScript)
 // const { env, logEnvSummary } = require('./src/server/config.js');
@@ -20,6 +23,19 @@ if (!env.ELEVENLABS_VOICE_ID || env.ELEVENLABS_VOICE_ID.length < 5) {
   throw new Error('ELEVENLABS_VOICE_ID is missing or too short');
 }
 
+// Хелпери для нативного http.ServerResponse
+function sendJSON(res, status, obj) {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.end(JSON.stringify(obj));
+}
+
+function sendText(res, status, text) {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.end(String(text));
+}
+
 // Безпечне ехо в логи
 function logEnvSummary() {
   const key = env.ELEVENLABS_API_KEY;
@@ -31,8 +47,63 @@ function logEnvSummary() {
 
 const PORT = process.env.PORT || 8080;
 
+// Функція для потокового TTS
+function toNodeReadable(webStream) {
+  return Readable.fromWeb ? Readable.fromWeb(webStream) : Readable.from(webStream);
+}
+
+async function streamTtsToResponse(res, text, {
+  voiceId = env.ELEVENLABS_VOICE_ID,
+  modelId = env.ELEVENLABS_MODEL_ID,
+  timeoutMs = 20000,
+  format = "mp3_44100_128",
+} = {}) {
+  if (!text?.trim()) return sendText(res, 400, "TTS text is empty");
+
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort("TTS timeout"), timeoutMs);
+
+  const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?optimize_streaming_latency=3&output_format=${format}`;
+
+  let upstream;
+  try {
+    upstream = await fetch(url, {
+      method: "POST",
+      signal: ac.signal,
+      headers: {
+        "xi-api-key": env.ELEVENLABS_API_KEY,
+        "Content-Type": "application/json",
+        "Accept": "audio/mpeg",
+      },
+      body: JSON.stringify({
+        model_id: modelId,
+        text,
+        voice_settings: { stability: 0.3, similarity_boost: 0.8 },
+      }),
+    });
+  } catch (e) {
+    clearTimeout(timer);
+    return sendText(res, 502, "Upstream fetch error: " + String(e));
+  }
+
+  if (!upstream.ok) {
+    clearTimeout(timer);
+    const body = await upstream.text().catch(() => "");
+    return sendText(res, upstream.status, body || `Upstream status ${upstream.status}`);
+  }
+
+  res.setHeader("Content-Type", "audio/mpeg");
+  await new Promise((resolve) => {
+    pipeline(
+      toNodeReadable(upstream.body),
+      res,
+      (err) => { clearTimeout(timer); if (err) console.error("[/status/tts] pipeline error:", err); resolve(); }
+    );
+  });
+}
+
 // Створюємо HTTP сервер
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   // CORS заголовки
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -44,11 +115,12 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  const { pathname, query } = parse(req.url, true);
+
   if (req.method === 'GET') {
     // Health check endpoint
-    if (req.url === '/') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
+    if (pathname === '/') {
+      return sendJSON(res, 200, {
         status: 'running',
         message: 'WebSocket сервер з ElevenLabs інтеграцією працює',
         timestamp: new Date().toISOString(),
@@ -56,28 +128,39 @@ const server = http.createServer((req, res) => {
         uptime: process.uptime(),
         connections: wss.clients.size,
         features: ['WebSocket', 'ElevenLabs TTS', 'AI Agent']
-      }));
-      return;
+      });
     }
 
     // TTS status endpoint для ручної перевірки
-    if (req.url === '/status/tts') {
-      generateElevenLabsAudio("Hello from Hungry Bot")
-        .then(audioBuffer => {
-          res.setHeader('Content-Type', 'audio/mpeg');
-          res.end(audioBuffer);
-        })
-        .catch(error => {
-          res.status(500).send(String(error.message || error));
-        });
-      return;
+    if (pathname === '/status/tts') {
+      const text = (query?.text && String(query.text)) || "Hello from Hungry Bot";
+      return streamTtsToResponse(res, text);
     }
 
-    res.writeHead(404, { 'Content-Type': 'text/plain' });
-    res.end('Not found');
+    // TTS JSON endpoint для діагностики
+    if (pathname === '/status/tts-json') {
+      const url = `https://api.elevenlabs.io/v1/text-to-speech/${env.ELEVENLABS_VOICE_ID}/stream?output_format=mp3_44100_128`;
+      try {
+        const r = await fetch(url, {
+          method: "POST",
+          headers: {
+            "xi-api-key": env.ELEVENLABS_API_KEY,
+            "Content-Type": "application/json",
+            "Accept": "audio/mpeg",
+          },
+          body: JSON.stringify({ model_id: env.ELEVENLABS_MODEL_ID, text: "ok" }),
+        });
+        const out = { status: r.status, ok: r.ok, headers: Object.fromEntries(r.headers.entries()) };
+        if (!r.ok) out.body = (await r.text().catch(() => "")).slice(0, 800);
+        return sendJSON(res, 200, out);
+      } catch (e) {
+        return sendJSON(res, 502, { error: String(e) });
+      }
+    }
+
+    return sendText(res, 404, 'Not found');
   } else {
-    res.writeHead(405, { 'Content-Type': 'text/plain' });
-    res.end('Method not allowed');
+    return sendText(res, 405, 'Method not allowed');
   }
 });
 

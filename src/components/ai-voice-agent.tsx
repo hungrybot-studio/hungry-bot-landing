@@ -45,23 +45,7 @@ export function AIVoiceAgent() {
             
             case 'audio':
               if (data.format === 'mp3' && data.data) {
-                // перетворюємо base64 -> Blob -> Audio
-                const bin = Uint8Array.from(atob(data.data), c => c.charCodeAt(0));
-                const blob = new Blob([bin], { type: 'audio/mpeg' });
-                const url = URL.createObjectURL(blob);
-
-                const audio = new Audio(url);
-                audio.volume = 1.0;
-                audio.play().then(() => {
-                  console.log('🎵 Аудіо від агента відтворюється');
-                }).catch((e) => {
-                  console.error('❌ Audio play blocked:', e);
-                });
-                
-                // Очищаємо URL після завантаження
-                audio.onloadeddata = () => {
-                  URL.revokeObjectURL(url);
-                };
+                playBase64Mp3(data.data);
               }
               break;
             
@@ -135,9 +119,49 @@ export function AIVoiceAgent() {
   };
 
   const handleConnect = async () => {
-    setIsConnecting(true);
-    connectWebSocket();
+    try {
+      // Розблокувати аудіо перед підключенням
+      await unlockAudio();
+      
+      setIsConnecting(true);
+      connectWebSocket();
+    } catch (error) {
+      console.error('❌ Помилка підключення:', error);
+      setIsConnecting(false);
+    }
   };
+
+  // Функція для розблокування аудіо
+  async function unlockAudio() {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      await ctx.resume();
+      // optional: програти 0.05с тиші
+      const osc = ctx.createOscillator(); 
+      const gain = ctx.createGain();
+      gain.gain.value = 0; 
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(); 
+      setTimeout(() => { 
+        osc.stop(); 
+        ctx.close(); 
+      }, 50);
+    } catch {}
+  }
+
+  // Функція для відтворення base64 MP3
+  function playBase64Mp3(b64: string) {
+    const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const blob = new Blob([bin], { type: "audio/mpeg" });
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.play().catch(e => console.error("Audio play blocked:", e));
+    
+    // Очищаємо URL після завантаження
+    audio.onloadeddata = () => {
+      URL.revokeObjectURL(url);
+    };
+  }
 
   const handleDisconnect = () => {
     if (wsRef.current) {
@@ -206,25 +230,48 @@ export function AIVoiceAgent() {
             Агент сам веде діалог та відповідає на всі твої питання про кухню.
           </motion.p>
 
-          {/* AI Voice Agent Button */}
-          <motion.div
-            className="mb-8"
-            initial={{ opacity: 0, scale: 0.9 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.6, duration: 0.6 }}
-            viewport={{ once: true }}
-          >
-            {!isConnected ? (
-              <CTAButton
-                onClick={handleConnect}
-                variant="primary"
-                size="lg"
-                buttonText={isConnecting ? "🔗 Підключаємося..." : "🤖 Запитати Hungry Bot"}
-                location="ai_voice_agent"
-                className="mx-auto text-lg px-8 py-4"
-                disabled={isConnecting}
-              />
-            ) : (
+                     {/* AI Voice Agent Button */}
+           <motion.div
+             className="mb-8"
+             initial={{ opacity: 0, scale: 0.9 }}
+             whileInView={{ opacity: 1, scale: 1 }}
+             transition={{ delay: 0.6, duration: 0.6 }}
+             viewport={{ once: true }}
+           >
+             {!isConnected ? (
+               <div className="space-y-4">
+                 <CTAButton
+                   onClick={handleConnect}
+                   variant="primary"
+                   size="lg"
+                   buttonText={isConnecting ? "🔗 Підключаємося..." : "🤖 Запитати Hungry Bot"}
+                   location="ai_voice_agent"
+                   className="mx-auto text-lg px-8 py-4"
+                   disabled={isConnecting}
+                 />
+                 
+                 {/* Тестова кнопка для перевірки звуку */}
+                 <button
+                   onClick={async () => {
+                     try {
+                       // Розблокувати аудіо
+                       await unlockAudio();
+                       
+                       // Тест звуку напряму з Render
+                       const url = "https://hungry-bot-websocket-server.onrender.com/status/tts?text=" + 
+                         encodeURIComponent("Привіт! Я Голодний Бот");
+                       const a = new Audio(url);
+                       a.play().catch(console.error);
+                     } catch (error) {
+                       console.error('❌ Помилка тесту звуку:', error);
+                     }
+                   }}
+                   className="mx-auto block px-6 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors"
+                 >
+                   🎵 Тест звуку
+                 </button>
+               </div>
+             ) : (
               <div className="space-y-4">
                 <div className="bg-white rounded-lg p-6 shadow-lg max-w-md mx-auto">
                   <h3 className="text-lg font-semibold mb-4">Hungry Bot активовано! 🤖✨</h3>
