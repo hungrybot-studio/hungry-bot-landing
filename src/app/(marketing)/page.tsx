@@ -12,6 +12,7 @@ import { FinalCta } from '@/components/final-cta';
 import { Footer } from '@/components/footer';
 import { LeadFormModal } from '@/components/lead-form-modal';
 import { ResponsiveTest } from '@/components/responsive-test';
+import { EnvTest } from '@/components/env-test';
 import { parseUTMParams } from '@/lib/utm';
 
 export default function HomePage() {
@@ -63,6 +64,9 @@ export default function HomePage() {
       
       {/* Responsive Test (only in development) */}
       <ResponsiveTest />
+      
+      {/* Environment Test (only in development) */}
+      <EnvTest />
     </main>
   );
 }

@@ -4,16 +4,16 @@ import { leadPayloadSchema } from './validators';
 
 export async function submitLeadForm(data: LeadPayload): Promise<{ success: boolean; error?: string }> {
   try {
+    console.log('📨 submitLeadForm отримав дані:', data);
+    
     // Validate data
     const validatedData = leadPayloadSchema.parse(data);
+    console.log('✅ Дані валідовано:', validatedData);
     
-    // Check if webhook is configured
-    if (!env.NEXT_PUBLIC_LEADS_WEBHOOK) {
-      throw new Error('Webhook URL not configured');
-    }
+    console.log('🌐 Відправляємо через локальний API роут');
 
-    // Send data to Google Apps Script
-    const response = await fetch(env.NEXT_PUBLIC_LEADS_WEBHOOK, {
+    // Send data through our local API route (bypasses CORS)
+    const response = await fetch('/api/submit-lead', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -22,15 +22,17 @@ export async function submitLeadForm(data: LeadPayload): Promise<{ success: bool
     });
 
     if (!response.ok) {
+      console.error('❌ HTTP помилка:', response.status, response.statusText);
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const result = await response.json();
+    console.log('📥 Отримано відповідь від API роута:', result);
     
-    if (result.ok) {
+    if (result.success) {
       return { success: true };
     } else {
-      throw new Error('Server returned error');
+      throw new Error(result.error || 'Server returned error');
     }
   } catch (error) {
     console.error('Form submission error:', error);

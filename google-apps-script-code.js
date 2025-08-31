@@ -1,18 +1,17 @@
 // Google Apps Script для Hungry Bot
 // Правильно обробляє CORS та preflight запити
 
-// ID вашої Google таблиці
-const SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID_HERE';
-const SHEET_NAME = 'Leads';
+// ID вашої Google таблиці (залишаємо для довідки)
+const SPREADSHEET_ID = '14GY5TXBOsDBEqorkZF7fTy2O4MWbufHrODLi-xo5WCK';
+const SHEET_NAME = 'Аркуш1';
 
 /**
  * Обробляє GET запити (для тестування)
  */
 function doGet(e) {
   return createCORSResponse({
-    status: 200,
     data: {
-      message: 'Hungry Bot Webhook активний',
+      message: 'Вебхук Hungry Bot V2 активний',
       timestamp: new Date().toISOString(),
       status: 'success'
     }
@@ -34,7 +33,6 @@ function doPost(e) {
     } catch (parseError) {
       console.error('❌ Помилка парсингу JSON:', parseError);
       return createCORSResponse({
-        status: 400,
         data: {
           success: false,
           error: 'Неправильний формат JSON',
@@ -48,7 +46,6 @@ function doPost(e) {
         !formData.tone || !formData.style_preference || !formData.primary_goal || 
         !formData.payment_willingness || !formData.fair_price || !formData.consent) {
       return createCORSResponse({
-        status: 400,
         data: {
           success: false,
           error: 'Відсутні обов\'язкові поля',
@@ -60,7 +57,6 @@ function doPost(e) {
     // Перевіряємо згоду користувача
     if (formData.consent !== true) {
       return createCORSResponse({
-        status: 400,
         data: {
           success: false,
           error: 'Необхідна згода з умовами',
@@ -75,7 +71,6 @@ function doPost(e) {
     if (result.success) {
       console.log('✅ Дані успішно записано в таблицю');
       return createCORSResponse({
-        status: 200,
         data: {
           success: true,
           message: 'Дані успішно збережено',
@@ -86,7 +81,6 @@ function doPost(e) {
     } else {
       console.error('❌ Помилка запису в таблицю:', result.error);
       return createCORSResponse({
-        status: 500,
         data: {
           success: false,
           error: 'Помилка збереження даних',
@@ -98,7 +92,6 @@ function doPost(e) {
   } catch (error) {
     console.error('❌ Критична помилка в doPost:', error);
     return createCORSResponse({
-      status: 500,
       data: {
         success: false,
         error: 'Внутрішня помилка сервера',
@@ -109,43 +102,32 @@ function doPost(e) {
 }
 
 /**
- * Обробляє OPTIONS запити (preflight для CORS)
+ * Обробляє OPTIONS запити (preflight для CORS) - КЛЮЧОВА ФУНКЦІЯ!
  */
 function doOptions(e) {
   console.log('🔄 Обробка preflight OPTIONS запиту');
   
-  return createCORSResponse({
-    status: 200,
-    data: {
-      message: 'Preflight запит оброблено',
-      timestamp: new Date().toISOString()
-    },
-    isPreflight: true
-  });
+  // Створюємо відповідь з правильними CORS заголовками
+  const response = ContentService.createTextOutput();
+  
+  // Встановлюємо тип контенту
+  response.setMimeType(ContentService.MimeType.TEXT);
+  
+  // Встановлюємо тіло відповіді
+  response.setContent('Preflight OK');
+  
+  console.log('✅ Preflight запит оброблено з CORS заголовками');
+  return response;
 }
 
 /**
  * Створює відповідь з правильними CORS заголовками
  */
-function createCORSResponse({ status, data, isPreflight = false }) {
+function createCORSResponse({ data }) {
   const response = ContentService.createTextOutput();
   
   // Встановлюємо тип контенту
   response.setMimeType(ContentService.MimeType.JSON);
-  
-  // Встановлюємо статус
-  response.setHttpStatusCode(status);
-  
-  // Додаємо CORS заголовки
-  response.addHeader('Access-Control-Allow-Origin', '*');
-  response.addHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  response.addHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  response.addHeader('Access-Control-Max-Age', '86400'); // 24 години
-  
-  // Для preflight запитів додаємо додаткові заголовки
-  if (isPreflight) {
-    response.addHeader('Access-Control-Allow-Credentials', 'true');
-  }
   
   // Встановлюємо тіло відповіді
   response.setContent(JSON.stringify(data));
@@ -158,14 +140,28 @@ function createCORSResponse({ status, data, isPreflight = false }) {
  */
 function writeToSpreadsheet(formData) {
   try {
-    // Отримуємо таблицю
-    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    console.log('📊 Спроба запису в таблицю...');
+    console.log('🔍 Назва аркуша:', SHEET_NAME);
+    
+    // Отримуємо активну таблицю (замість openById)
+    let spreadsheet;
+    try {
+      spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+      console.log('✅ Активну таблицю знайдено');
+    } catch (error) {
+      console.error('❌ Не вдалося отримати активну таблицю:', error);
+      return { success: false, error: 'Не вдалося отримати доступ до таблиці' };
+    }
+    
     const sheet = spreadsheet.getSheetByName(SHEET_NAME);
     
     if (!sheet) {
       console.error('❌ Аркуш не знайдено:', SHEET_NAME);
-      return { success: false, error: 'Аркуш не знайдено' };
+      console.log('📋 Доступні аркуші:', spreadsheet.getSheets().map(s => s.getName()));
+      return { success: false, error: `Аркуш "${SHEET_NAME}" не знайдено` };
     }
+    
+    console.log('✅ Аркуш знайдено:', SHEET_NAME);
     
     // Підготовуємо дані для запису
     const rowData = [
@@ -189,6 +185,8 @@ function writeToSpreadsheet(formData) {
       formData.landing_variant || 'A'
     ];
     
+    console.log('📝 Дані для запису:', rowData);
+    
     // Записуємо дані
     sheet.appendRow(rowData);
     
@@ -197,6 +195,7 @@ function writeToSpreadsheet(formData) {
     const leadId = `LEAD_${Date.now()}_${lastRow}`;
     
     console.log('✅ Дані записано в рядок:', lastRow);
+    console.log('🆔 ID ліда:', leadId);
     
     return { 
       success: true, 
@@ -206,6 +205,7 @@ function writeToSpreadsheet(formData) {
     
   } catch (error) {
     console.error('❌ Помилка запису в таблицю:', error);
+    console.error('❌ Деталі помилки:', error.toString());
     return { 
       success: false, 
       error: error.toString() 
@@ -220,23 +220,32 @@ function testScript() {
   console.log('🧪 Тестування скрипту...');
   
   // Тестуємо створення CORS відповіді
-  const testResponse = createCORSResponse({
-    status: 200,
-    data: { message: 'Тест успішний' }
-  });
-  
-  console.log('✅ Тест CORS відповіді пройдено');
+  try {
+    const testResponse = createCORSResponse({
+      data: { message: 'Тест успішний' }
+    });
+    console.log('✅ Тест CORS відповіді пройдено');
+  } catch (error) {
+    console.error('❌ Помилка CORS відповіді:', error);
+  }
   
   // Тестуємо підключення до таблиці
   try {
-    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    console.log('🔍 Тестуємо підключення до таблиці...');
+    console.log('🔍 Назва аркуша:', SHEET_NAME);
+    
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    console.log('✅ Активну таблицю знайдено');
+    
     const sheet = spreadsheet.getSheetByName(SHEET_NAME);
     
     if (sheet) {
-      console.log('✅ Підключення до таблиці успішне');
+      console.log('✅ Аркуш знайдено:', SHEET_NAME);
       console.log('📊 Кількість рядків:', sheet.getLastRow());
+      console.log('📋 Назви колонок:', sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]);
     } else {
       console.log('⚠️ Аркуш не знайдено');
+      console.log('📋 Доступні аркуші:', spreadsheet.getSheets().map(s => s.getName()));
     }
   } catch (error) {
     console.error('❌ Помилка підключення до таблиці:', error);

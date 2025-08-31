@@ -21,6 +21,15 @@ export function LeadFormModal({ isOpen, onClose }: LeadFormModalProps) {
   const [isSuccess, setIsSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Додаємо логування для діагностики
+  useEffect(() => {
+    if (isOpen) {
+      console.log('🔍 Форма відкрита, перевіряємо змінні середовища:');
+      console.log('🌐 NEXT_PUBLIC_LEADS_WEBHOOK:', process.env.NEXT_PUBLIC_LEADS_WEBHOOK);
+      console.log('🔧 NODE_ENV:', process.env.NODE_ENV);
+    }
+  }, [isOpen]);
+
   const {
     register,
     handleSubmit,
@@ -32,6 +41,9 @@ export function LeadFormModal({ isOpen, onClose }: LeadFormModalProps) {
   } = useForm<LeadFormSchema>({
     resolver: zodResolver(leadFormSchema),
     mode: 'onChange',
+    defaultValues: {
+      consent: false,
+    },
   });
 
   const watchedEmail = watch('email');
@@ -70,6 +82,11 @@ export function LeadFormModal({ isOpen, onClose }: LeadFormModalProps) {
         ...data,
         ...utmData,
       };
+
+      // Додаємо логування для діагностики
+      console.log('📤 Відправляємо дані форми:', payload);
+      console.log('🔍 Перевіряємо поле consent:', payload.consent);
+      console.log('🔍 Тип поля consent:', typeof payload.consent);
 
       const result = await submitLeadForm(payload);
 
@@ -391,9 +408,13 @@ function FormContent({
       {/* Consent */}
       <ConsentCheckbox
         checked={watchedConsent || false}
-        onChange={(checked) => setValue('consent', checked)}
+        onChange={(checked) => {
+          setValue('consent', checked, { shouldValidate: true });
+          console.log('✅ Consent встановлено:', checked);
+        }}
         error={errors.consent?.message}
       />
+      <input type="hidden" {...register('consent')} />
 
       {/* Submit Error */}
       {submitError && (
