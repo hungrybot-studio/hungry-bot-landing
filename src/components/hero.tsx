@@ -100,7 +100,6 @@ export function Hero({ onOpenForm }: HeroProps) {
               onClick={onOpenForm}
               variant="primary"
               size="lg"
-              buttonText="🎟 Отримати раннє запрошення"
               location="hero_primary"
               className="w-full sm:w-auto"
             >
@@ -111,7 +110,6 @@ export function Hero({ onOpenForm }: HeroProps) {
               onClick={onOpenForm}
               variant="secondary"
               size="lg"
-              buttonText="🔥 Спробувати бета-бота (безкоштовно)"
               location="hero_secondary"
               className="w-full sm:w-auto"
             >

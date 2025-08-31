@@ -131,7 +131,6 @@ export function PainPoints({ onOpenForm }: PainPointsProps) {
             onClick={onOpenForm}
             variant="primary"
             size="lg"
-            buttonText="Дізнатись, чи підійде мені"
             location="pain_points"
             className="mx-auto"
           >

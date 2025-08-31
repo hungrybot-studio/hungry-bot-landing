@@ -210,7 +210,6 @@ export function WhatsNext({ onOpenForm }: WhatsNextProps) {
               onClick={onOpenForm}
               variant="primary"
               size="lg"
-              buttonText="🎟 Забронювати місце"
               location="whats_next"
               className="mx-auto"
             >

@@ -74,7 +74,6 @@ export function FinalCta({ onOpenForm }: FinalCtaProps) {
               onClick={onOpenForm}
               variant="secondary"
               size="lg"
-              buttonText="🚀 Отримати запрошення"
               location="final_cta_primary"
               className="w-full sm:w-auto bg-white hover:bg-gray-50 text-primary-600 border-white"
             >
@@ -85,7 +84,6 @@ export function FinalCta({ onOpenForm }: FinalCtaProps) {
               onClick={onOpenForm}
               variant="ghost"
               size="lg"
-              buttonText="🔥 Спробувати першим"
               location="final_cta_secondary"
               className="w-full sm:w-auto text-white hover:bg-white hover:text-primary-600 border-white"
             >

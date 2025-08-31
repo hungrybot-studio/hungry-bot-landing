@@ -89,7 +89,6 @@ export function VoiceTeaser() {
               onClick={handlePlayAudio}
               variant="primary"
               size="lg"
-              buttonText="🎧 Почути голос Бота"
               location="voice_teaser"
               className="mx-auto"
             >

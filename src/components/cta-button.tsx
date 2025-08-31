@@ -5,31 +5,38 @@ import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { trackCTAClick } from '@/lib/analytics';
 
-interface CTAButtonProps {
-  children: ReactNode;
+type BaseProps = {
   onClick?: () => void;
   variant?: 'primary' | 'secondary' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   className?: string;
-  buttonText: string;
   location: string;
   disabled?: boolean;
   type?: 'button' | 'submit';
-}
+};
 
-export function CTAButton({
-  children,
-  onClick,
-  variant = 'primary',
-  size = 'md',
-  className,
-  buttonText,
-  location,
-  disabled = false,
-  type = 'button',
-}: CTAButtonProps) {
+// Вимагаємо принаймні одне джерело тексту:
+type WithChildren = BaseProps & { children: ReactNode; buttonText?: never };
+type WithButtonText = BaseProps & { buttonText: string; children?: never };
+
+export type CTAButtonProps = WithChildren | WithButtonText;
+
+export function CTAButton(props: CTAButtonProps) {
+  const {
+    onClick,
+    variant = 'primary',
+    size = 'md',
+    className,
+    location,
+    disabled = false,
+    type = 'button',
+  } = props;
+
+  const buttonText = "buttonText" in props ? props.buttonText : "";
+  const children = "children" in props ? props.children : buttonText;
+
   const handleClick = () => {
-    trackCTAClick(buttonText, location);
+    trackCTAClick(buttonText || "Unknown Button", location);
     onClick?.();
   };
 

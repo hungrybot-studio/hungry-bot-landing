@@ -431,7 +431,6 @@ function FormContent({
         type="submit"
         disabled={isSubmitting}
         className="w-full"
-        buttonText="📝 Надіслати й отримати ранній доступ"
         location="form_submit"
       >
         {isSubmitting ? (
@@ -468,7 +467,6 @@ function SuccessContent({ onClose }: { onClose: () => void }) {
           onClick={() => window.open('https://t.me/hungrybot', '_blank')}
           variant="primary"
           size="lg"
-          buttonText="Відкрити Telegram-бота"
           location="success_telegram"
           className="w-full"
         >
@@ -479,7 +477,6 @@ function SuccessContent({ onClose }: { onClose: () => void }) {
           onClick={() => window.open('https://t.me/hungrybot_channel', '_blank')}
           variant="secondary"
           size="lg"
-          buttonText="Підписатися на приватний канал"
           location="success_channel"
           className="w-full"
         >

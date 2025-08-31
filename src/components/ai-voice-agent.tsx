@@ -137,6 +137,8 @@ export function AIVoiceAgent() {
 
   // Очищення при розмонтуванні
   useEffect(() => {
+    console.log("VOICE_AGENT_BUILD", "a8f67fc");
+    
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
