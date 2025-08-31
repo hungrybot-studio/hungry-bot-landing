@@ -1,0 +1,5 @@
+[33m203fe20[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m ✅ Форма працює! Google Apps Script налаштований
+[33m8249006[m feat: add WebSocket server for Render deployment
+[33mc76bb4a[m feat: add WebSocket server for Render deployment
+[33m35c21f0[m fix: add websocket script to package.json for Render deployment
+[33m9924014[m fix: resolve ESLint and TypeScript errors for Vercel deployment
