@@ -45,19 +45,26 @@ export function AIVoiceAgent() {
                setMessages(prev => [...prev, { type: 'bot', text: data.message }]);
                break;
              
-             case 'agent_speech':
-               console.log('🤖 Агент говорить:', data.message);
-               setAgentMessage(data.message);
-               setMessages(prev => [...prev, { type: 'bot', text: data.message }]);
-               setIsAgentActive(true);
-               break;
+                           case 'agent_speech':
+                console.log('🤖 Агент говорить:', data.message);
+                setAgentMessage(data.message);
+                setMessages(prev => [...prev, { type: 'bot', text: data.message }]);
+                setIsAgentActive(true);
+                console.log('🎤 Статус агента встановлено: ГОВОРИТЬ');
+                break;
              
-             case 'audio':
-               if (data.format === 'mp3' && data.data) {
-                 console.log('🎵 Отримано аудіо від агента');
-                 playBase64Mp3(data.data);
-               }
-               break;
+                           case 'audio':
+                if (data.format === 'mp3' && data.data) {
+                  console.log('🎵 Отримано аудіо від агента');
+                  playBase64Mp3(data.data);
+                  
+                  // Затримка перед можливістю переривання (аудіо має заграти)
+                  setTimeout(() => {
+                    console.log('🎤 Агент закінчив говорити, можна переривати');
+                    setIsAgentActive(false);
+                  }, 5000); // 5 секунд на аудіо
+                }
+                break;
                
              case 'audio_chunk':
                if (typeof data.data === 'string') {
@@ -128,6 +135,10 @@ export function AIVoiceAgent() {
       
       console.log('📤 Відправляю команду активації:', activationMessage);
       wsRef.current.send(JSON.stringify(activationMessage));
+      
+      // Встановлюємо статус "активується"
+      setIsAgentActive(true);
+      console.log('🎤 Статус агента: АКТИВУЄТЬСЯ');
     } else {
       console.error('❌ WebSocket не готовий для активації агента');
     }
@@ -139,6 +150,7 @@ export function AIVoiceAgent() {
   const interruptAgent = () => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       console.log('🎤 Перериваю агента...');
+      console.log('🎤 Поточний стан isAgentActive:', isAgentActive);
       
       wsRef.current.send(JSON.stringify({
         type: 'interrupt_agent',
@@ -146,6 +158,9 @@ export function AIVoiceAgent() {
       }));
       
       setIsAgentActive(false);
+      console.log('🎤 Статус агента встановлено: ПЕРЕРВАНО');
+    } else {
+      console.error('❌ WebSocket не готовий для переривання агента');
     }
   };
 
@@ -165,8 +180,11 @@ export function AIVoiceAgent() {
   // Функція для розблокування аудіо
   async function unlockAudio() {
     try {
+      console.log('🔊 unlockAudio викликано');
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       await ctx.resume();
+      console.log('🔊 AudioContext відновлено');
+      
       // optional: програти 0.05с тиші
       const osc = ctx.createOscillator(); 
       const gain = ctx.createGain();
@@ -176,8 +194,13 @@ export function AIVoiceAgent() {
       setTimeout(() => { 
         osc.stop(); 
         ctx.close(); 
+        console.log('🔊 Тестовий звук завершено');
       }, 50);
-    } catch {}
+      
+      console.log('🔊 Аудіо розблоковано успішно');
+    } catch (error) {
+      console.error('❌ Помилка розблокування аудіо:', error);
+    }
   }
 
   // Черга аудіо для плавного відтворення
@@ -185,31 +208,75 @@ export function AIVoiceAgent() {
   let playing = false;
 
   function enqueue(url: string) {
+    console.log('🎵 enqueue викликано, URL:', url.substring(0, 50) + '...');
     queue.push(url); 
-    if (!playing) playNext();
+    console.log('🎵 Черга аудіо, розмір:', queue.length);
+    if (!playing) {
+      console.log('🎵 Запускаю playNext (не грає)');
+      playNext();
+    } else {
+      console.log('🎵 Аудіо вже грає, чекаю в черзі');
+    }
   }
 
   function playNext() {
+    console.log('🎵 playNext викликано, playing:', playing);
     const url = queue.shift(); 
     if (!url) { 
+      console.log('🎵 Черга порожня, зупиняю');
       playing = false; 
       return; 
     }
+    
+    console.log('🎵 Граю аудіо з URL:', url.substring(0, 50) + '...');
     playing = true;
+    
     const a = new Audio(url);
-    a.onended = a.onerror = () => { 
+    console.log('🎵 Створено Audio елемент');
+    
+    a.onended = () => { 
+      console.log('🎵 Аудіо закінчилося');
       URL.revokeObjectURL(url); 
       playNext(); 
     };
-    a.play().catch(() => playNext());
+    
+    a.onerror = (error) => { 
+      console.error('🎵 Помилка аудіо:', error);
+      URL.revokeObjectURL(url); 
+      playNext(); 
+    };
+    
+    a.onloadstart = () => console.log('🎵 Аудіо почало завантажуватися');
+    a.oncanplay = () => console.log('🎵 Аудіо готове до відтворення');
+    
+    console.log('🎵 Спроба відтворити аудіо...');
+    a.play().then(() => {
+      console.log('✅ Аудіо успішно запущено');
+    }).catch((error) => {
+      console.error('❌ Помилка відтворення аудіо:', error);
+      playNext();
+    });
   }
 
   // Функція для відтворення base64 MP3
   function playBase64Mp3(b64: string) {
-    const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-    const blob = new Blob([bin], { type: "audio/mpeg" });
-    const url = URL.createObjectURL(blob);
-    enqueue(url);
+    console.log('🎵 playBase64Mp3 викликано, довжина base64:', b64.length);
+    
+    try {
+      const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      console.log('🎵 Створено Uint8Array, розмір:', bin.length, 'байт');
+      
+      const blob = new Blob([bin], { type: "audio/mpeg" });
+      console.log('🎵 Створено Blob, розмір:', blob.size, 'байт');
+      
+      const url = URL.createObjectURL(blob);
+      console.log('🎵 Створено URL:', url.substring(0, 50) + '...');
+      
+      enqueue(url);
+      console.log('🎵 Аудіо додано до черги');
+    } catch (error) {
+      console.error('❌ Помилка в playBase64Mp3:', error);
+    }
   }
 
   const handleDisconnect = () => {
@@ -320,18 +387,23 @@ export function AIVoiceAgent() {
                     </div>
                   )}
                   
-                  {/* Кнопка переривання */}
-                  <button
-                    onClick={interruptAgent}
-                    disabled={!isAgentActive}
-                    className={`w-full py-3 px-6 rounded-lg font-medium transition-colors ${
-                      isAgentActive 
-                        ? 'bg-red-500 hover:bg-red-600 text-white' 
-                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    }`}
-                  >
-                    🎤 Перервати агента
-                  </button>
+                                     {/* Кнопка переривання */}
+                   <button
+                     onClick={interruptAgent}
+                     disabled={!isAgentActive}
+                     className={`w-full py-3 px-6 rounded-lg font-medium transition-colors ${
+                       isAgentActive 
+                         ? 'bg-red-500 hover:bg-red-600 text-white' 
+                         : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                     }`}
+                   >
+                     {isAgentActive ? '🎤 Перервати агента' : '⏸️ Агент не активний'}
+                   </button>
+                   
+                   {/* Додаткова інформація про стан */}
+                   <div className="mt-2 text-xs text-gray-500">
+                     Статус: {isAgentActive ? '🎤 Говорить' : '⏸️ Очікує'}
+                   </div>
                   
                   {/* Повідомлення */}
                   {messages.length > 0 && (
