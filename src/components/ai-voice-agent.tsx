@@ -1,8 +1,12 @@
 "use client";
 import { motion } from "framer-motion";
 import { CTAButton } from "./cta-button";
+import { useElevenAgentWS } from "@/hooks/useElevenAgentWS";
+
+const AGENT_ID = process.env.NEXT_PUBLIC_ELEVEN_AGENT_ID || "agent_6101k3vk48naeaers05d01pzw084";
 
 export default function AIVoiceAgent() {
+  const { start, stop, connected, status } = useElevenAgentWS(AGENT_ID);
   return (
     <section className="py-20 bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4">
@@ -45,13 +49,23 @@ export default function AIVoiceAgent() {
             viewport={{ once: true }}
           >
             <CTAButton
-              onClick={() => (window as any).hungryBotOpenAgent?.()}
+              onClick={() => (connected ? stop() : start())}
               variant="primary"
               size="lg"
               location="ai_voice_agent"
-              className="mx-auto text-lg px-8 py-4"
+              className="mx-auto text-lg px-8 py-4 min-w-[260px]"
+              disabled={status === "connecting"}
             >
-              🤖 Запитати Hungry Bot
+              {status === "connecting" ? (
+                <div className="flex items-center justify-center space-x-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Підключаємося...</span>
+                </div>
+              ) : connected ? (
+                "🛑 Зупинити Hungry Bot"
+              ) : (
+                "🤖 Запитати Hungry Bot"
+              )}
             </CTAButton>
           </motion.div>
 
@@ -109,6 +123,31 @@ export default function AIVoiceAgent() {
             </motion.div>
           </div>
 
+          {/* Status Indicator */}
+          {connected && (
+            <motion.div
+              className="mt-8 p-4 bg-green-50 border border-green-200 rounded-lg"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="flex items-center justify-center space-x-2 text-green-700">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm font-medium">Hungry Bot активний - говори в мікрофон!</span>
+              </div>
+              {process.env.NODE_ENV !== "production" && (
+                <>
+                  <div className="mt-2 text-xs text-gray-500 text-center">
+                    Відкрийте DevTools (F12) → Console для діагностики
+                  </div>
+                  <div className="mt-2 text-xs text-blue-600 text-center">
+                    💡 Якщо не чуєте звук - перевірте гучність браузера та системи
+                  </div>
+                </>
+              )}
+            </motion.div>
+          )}
+
           {/* Footer Note */}
           <motion.p
             className="text-sm text-gray-500 mt-12 italic"
@@ -117,7 +156,7 @@ export default function AIVoiceAgent() {
             transition={{ delay: 1.4, duration: 0.6 }}
             viewport={{ once: true }}
           >
-            * Hungry Bot використовує ElevenLabs для натурального голосу та AI для розумних відповідей
+            * Hungry Bot використовує ElevenLabs WebSocket API для реального часу голосового спілкування
           </motion.p>
         </motion.div>
       </div>
