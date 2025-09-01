@@ -59,7 +59,7 @@ function detectFormat(b64: string): "mp3" | "wav" | "pcm16" {
 
 function blobUrlFromBase64(b64: string, mime: string) {
   const bin = b64ToBytes(b64);
-  return URL.createObjectURL(new Blob([bin], { type: mime }));
+  return URL.createObjectURL(new Blob([bin as BlobPart], { type: mime }));
 }
 
 function createAudioQueue() {
